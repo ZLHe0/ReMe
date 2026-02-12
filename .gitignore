@@ -43,3 +43,9 @@ meta_memory/*
 *.db
 memories/*
 .reme/*
+
+# BFCL Claude data
+cookbook/bfcl_claude/data/*
+cookbook/bfcl_claude/gorilla/*
+cookbook/bfcl_claude/exp_result/*
+cookbook/bfcl_claude/*.jsonl
