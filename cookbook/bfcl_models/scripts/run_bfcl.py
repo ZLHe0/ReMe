@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-BFCL v3 Runner using Claude API via AWS Bedrock.
-This script runs the BFCL benchmark with Claude models.
+BFCL v3 Runner with pluggable model backends (Bedrock Claude or OpenAI-compatible).
 """
 
 import time
@@ -16,7 +15,7 @@ from loguru import logger
 
 load_dotenv()
 
-from claude_bfcl_agent import ClaudeBFCLAgent
+from bfcl_agent import BFCLAgent
 
 
 def run_agent_task(
@@ -26,6 +25,9 @@ def run_agent_task(
     data_path: str,
     answer_path: Path,
     model_id: str,
+    backend: str,
+    base_url: Optional[str],
+    api_key: Optional[str],
     num_trials: int,
     enable_thinking: bool,
     use_memory: bool,
@@ -44,13 +46,16 @@ def run_agent_task(
     Returns:
         List of results
     """
-    agent = ClaudeBFCLAgent(
+    agent = BFCLAgent(
         index=worker_index,
         task_ids=task_ids,
         experiment_name=experiment_name,
         data_path=data_path,
         answer_path=answer_path,
         model_id=model_id,
+        backend=backend,
+        base_url=base_url,
+        api_key=api_key,
         num_trials=num_trials,
         enable_thinking=enable_thinking,
         use_memory=use_memory,
@@ -63,7 +68,7 @@ def run_agent_task(
 
 def run_bfcl_benchmark(
     dataset_name: str = "bfcl-multi-turn-base",
-    experiment_suffix: str = "claude",
+    experiment_suffix: str = "run",
     max_workers: int = 4,
     num_trials: int = 1,
     model_id: str = "us.anthropic.claude-sonnet-4-20250514-v1:0",
@@ -71,19 +76,26 @@ def run_bfcl_benchmark(
     answer_path: Path = Path("data/possible_answer"),
     use_memory: bool = False,
     enable_thinking: bool = False,
+    backend: str = "bedrock",
+    base_url: Optional[str] = None,
+    api_key: Optional[str] = None,
     memory_base_url: str = "http://0.0.0.0:8002/",
     memory_workspace_id: str = "bfcl_v3",
     region_name: str = "us-west-2",
+    output_dir: Optional[str] = None,
 ):
     """
-    Run the BFCL benchmark with Claude.
+    Run the BFCL benchmark with a selected backend.
 
     Args:
         dataset_name: Name of the dataset
         experiment_suffix: Suffix for experiment name
         max_workers: Number of parallel workers
         num_trials: Number of trials per task
-        model_id: Claude model ID
+        model_id: Model ID (Bedrock Claude or OpenAI-compatible)
+        backend: "bedrock" or "openai"
+        base_url: OpenAI-compatible base URL (required for backend=openai)
+        api_key: OpenAI-compatible API key (optional for local vLLM)
         data_path: Path to BFCL data
         answer_path: Path to answer files
         use_memory: Whether to use ReMe memory
@@ -95,9 +107,12 @@ def run_bfcl_benchmark(
     experiment_name = f"{dataset_name}_{experiment_suffix}"
 
     # Create output directory
-    model_short = model_id.split("/")[-1].replace(":", "_")
-    think_suffix = "with_think" if enable_thinking else "no_think"
-    output_path = Path(f"./exp_result/{model_short}/{think_suffix}")
+    if output_dir:
+        output_path = Path(output_dir)
+    else:
+        model_short = model_id.split("/")[-1].replace(":", "_")
+        think_suffix = "with_think" if enable_thinking else "no_think"
+        output_path = Path(f"./exp_result/{model_short}/{think_suffix}")
     output_path.mkdir(parents=True, exist_ok=True)
 
     # Load task IDs
@@ -126,6 +141,9 @@ def run_bfcl_benchmark(
                     data_path=data_path,
                     answer_path=answer_path,
                     model_id=model_id,
+                    backend=backend,
+                    base_url=base_url,
+                    api_key=api_key,
                     num_trials=num_trials,
                     enable_thinking=enable_thinking,
                     use_memory=use_memory,
@@ -148,13 +166,16 @@ def run_bfcl_benchmark(
                     logger.error(f"Worker failed: {e}")
     else:
         # Sequential execution
-        agent = ClaudeBFCLAgent(
+        agent = BFCLAgent(
             index=0,
             task_ids=task_ids,
             experiment_name=experiment_name,
             data_path=data_path,
             answer_path=answer_path,
             model_id=model_id,
+            backend=backend,
+            base_url=base_url,
+            api_key=api_key,
             num_trials=num_trials,
             enable_thinking=enable_thinking,
             use_memory=use_memory,
@@ -191,7 +212,7 @@ def main():
     parser.add_argument(
         "--experiment-suffix",
         type=str,
-        default="claude",
+        default="run",
         help="Experiment suffix"
     )
     parser.add_argument(
@@ -210,7 +231,26 @@ def main():
         "--model-id",
         type=str,
         default="us.anthropic.claude-sonnet-4-20250514-v1:0",
-        help="Claude model ID"
+        help="Model ID (Bedrock or OpenAI-compatible)"
+    )
+    parser.add_argument(
+        "--backend",
+        type=str,
+        default="bedrock",
+        choices=["bedrock", "openai"],
+        help="Model backend: bedrock or openai-compatible"
+    )
+    parser.add_argument(
+        "--base-url",
+        type=str,
+        default=None,
+        help="OpenAI-compatible base URL (required for backend=openai)"
+    )
+    parser.add_argument(
+        "--api-key",
+        type=str,
+        default=None,
+        help="OpenAI-compatible API key (optional for local vLLM)"
     )
     parser.add_argument(
         "--data-path",
@@ -252,6 +292,12 @@ def main():
         default="us-west-2",
         help="AWS region"
     )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=None,
+        help="Override output directory (default: ./exp_result/<model>/<think>)"
+    )
 
     args = parser.parse_args()
 
@@ -261,6 +307,9 @@ def main():
         max_workers=args.max_workers,
         num_trials=args.num_trials,
         model_id=args.model_id,
+        backend=args.backend,
+        base_url=args.base_url,
+        api_key=args.api_key,
         data_path=args.data_path,
         answer_path=Path(args.answer_path),
         use_memory=args.use_memory,
@@ -268,6 +317,7 @@ def main():
         memory_base_url=args.memory_base_url,
         memory_workspace_id=args.memory_workspace_id,
         region_name=args.region_name,
+        output_dir=args.output_dir,
     )
 
 

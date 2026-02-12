@@ -216,7 +216,7 @@ def main():
     logger.info("1. Install BFCL evaluation package:")
     logger.info("   cd gorilla/berkeley-function-call-leaderboard && pip install -e .")
     logger.info("2. Run benchmark:")
-    logger.info("   python run_bfcl_claude.py --data-path data/multiturn_data_base_val.jsonl")
+    logger.info("   python scripts/run_bfcl.py --data-path data/multiturn_data_base_val.jsonl")
 
 
 if __name__ == "__main__":

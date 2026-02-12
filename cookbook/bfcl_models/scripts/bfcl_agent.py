@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-BFCL v3 Agent using Claude API via AWS Bedrock.
-This module provides a BFCL agent that uses Claude for function calling tasks.
+BFCL v3 Agent with pluggable backends (Bedrock Claude or OpenAI-compatible).
 """
 
 import os
@@ -16,13 +15,13 @@ from typing import Dict, List, Any, Optional
 
 import boto3
 from botocore.exceptions import ClientError
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
+from openai import OpenAI
 from loguru import logger
 from tqdm import tqdm
 
 # Import BFCL utilities from parent directory
 import sys
-sys.path.insert(0, str(Path(__file__).parent.parent / "bfcl"))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "bfcl"))
 
 from bfcl_utils import (
     load_test_case,
@@ -131,8 +130,8 @@ def convert_claude_tool_use_to_openai(tool_use_blocks: List[Dict]) -> List[Dict]
     return tool_calls
 
 
-class ClaudeBFCLAgent:
-    """A BFCL Agent using Claude API via AWS Bedrock for function calling tasks."""
+class BFCLAgent:
+    """A BFCL Agent with Bedrock Claude or OpenAI-compatible backends."""
 
     def __init__(
         self,
@@ -142,6 +141,9 @@ class ClaudeBFCLAgent:
         data_path: str = "data/multiturn_data_base_val.jsonl",
         answer_path: Path = Path("data/possible_answer"),
         model_id: str = DEFAULT_MODEL_ID,
+        backend: str = "bedrock",
+        base_url: Optional[str] = None,
+        api_key: Optional[str] = None,
         temperature: float = 0.7,
         max_interactions: int = 30,
         max_response_size: int = 2000,
@@ -167,6 +169,9 @@ class ClaudeBFCLAgent:
         self.data_path: str = data_path
         self.answer_path: Path = answer_path
         self.model_id: str = model_id
+        self.backend: str = backend
+        self.base_url: Optional[str] = base_url
+        self.api_key: Optional[str] = api_key
         self.temperature: float = temperature
         self.max_interactions: int = max_interactions
         self.max_response_size: int = max_response_size
@@ -181,8 +186,17 @@ class ClaudeBFCLAgent:
         self.memory_base_url: str = memory_base_url
         self.memory_workspace_id: str = memory_workspace_id
 
-        # Initialize Bedrock client
-        self.client = get_bedrock_client(region_name)
+        # Initialize backend client
+        if self.backend == "bedrock":
+            self.client = get_bedrock_client(region_name)
+            self.openai_client = None
+        elif self.backend == "openai":
+            if not self.base_url:
+                raise ValueError("base_url is required for backend='openai'")
+            self.openai_client = OpenAI(base_url=self.base_url, api_key=self.api_key or "dummy-key")
+            self.client = None
+        else:
+            raise ValueError(f"Unsupported backend: {self.backend}")
 
         # Initialize state
         self.history: List[List[List[dict]]] = [[] for _ in range(num_trials)]
@@ -209,14 +223,9 @@ class ClaudeBFCLAgent:
         self.retrieved_memory_list[run_id].append([])
         self.current_turn[run_id][i] = 1
 
-    @retry(
-        retry=retry_if_exception(is_throttling),
-        stop=stop_after_attempt(20),
-        wait=wait_exponential(multiplier=1, min=2, max=10)
-    )
     def call_llm(self, messages: List[dict], tool_schemas: List[dict]) -> dict:
         """
-        Call Claude API via Bedrock with tool support.
+        Call the configured LLM backend with tool support.
 
         Args:
             messages: List of conversation messages in OpenAI format
@@ -225,13 +234,15 @@ class ClaudeBFCLAgent:
         Returns:
             Assistant message in OpenAI format
         """
+        if self.backend == "bedrock":
+            return self._call_bedrock(messages, tool_schemas)
+        return self._call_openai(messages, tool_schemas)
+
+    def _call_bedrock(self, messages: List[dict], tool_schemas: List[dict]) -> dict:
         # Convert messages from OpenAI format to Claude format
         claude_messages = self._convert_messages_to_claude(messages)
-
-        # Convert tools to Claude format
         claude_tools = convert_openai_tools_to_claude(tool_schemas)
 
-        # Build payload
         payload = {
             "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": MAX_TOKENS,
@@ -239,27 +250,21 @@ class ClaudeBFCLAgent:
             "messages": claude_messages,
         }
 
-        # Add tools if available
         if claude_tools:
             payload["tools"] = claude_tools
             payload["tool_choice"] = {"type": "auto"}
 
-        # Add thinking if enabled
         if self.enable_thinking:
             payload["thinking"] = {"type": "enabled", "budget_tokens": THINKING_BUDGET}
 
-        # Call Bedrock
         for attempt in range(100):
             try:
                 resp = self.client.invoke_model(
                     body=json.dumps(payload),
-                    modelId=self.model_id
+                    modelId=self.model_id,
                 )
-                resp_body = json.loads(resp['body'].read())
-
-                # Parse response and convert to OpenAI format
+                resp_body = json.loads(resp["body"].read())
                 return self._convert_claude_response_to_openai(resp_body)
-
             except ClientError as e:
                 if is_throttling(e):
                     logger.warning(f"Throttling, attempt {attempt + 1}/100")
@@ -267,10 +272,42 @@ class ClaudeBFCLAgent:
                 else:
                     raise
             except Exception as e:
-                logger.exception(f"Error calling Claude: {e}")
+                logger.exception(f"Error calling Bedrock Claude: {e}")
                 time.sleep(1 + attempt * 10)
 
-        return {"role": "assistant", "content": "Error: Failed to get response from Claude"}
+        return {"role": "assistant", "content": "Error: Failed to get response from Bedrock"}
+
+    def _call_openai(self, messages: List[dict], tool_schemas: List[dict]) -> dict:
+        for attempt in range(20):
+            try:
+                resp = self.openai_client.chat.completions.create(
+                    model=self.model_id,
+                    messages=messages,
+                    tools=tool_schemas if tool_schemas else None,
+                    tool_choice="auto" if tool_schemas else None,
+                    temperature=self.temperature,
+                )
+                msg = resp.choices[0].message
+                out = {"role": "assistant", "content": msg.content or ""}
+                if getattr(msg, "tool_calls", None):
+                    out["tool_calls"] = []
+                    for tc in msg.tool_calls:
+                        out["tool_calls"].append(
+                            {
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {
+                                    "name": tc.function.name,
+                                    "arguments": tc.function.arguments,
+                                },
+                            }
+                        )
+                return out
+            except Exception as e:
+                logger.exception(f"Error calling OpenAI-compatible backend: {e}")
+                time.sleep(1 + attempt * 2)
+
+        return {"role": "assistant", "content": "Error: Failed to get response from OpenAI backend"}
 
     def _convert_messages_to_claude(self, messages: List[dict]) -> List[dict]:
         """
@@ -489,7 +526,7 @@ class ClaudeBFCLAgent:
             if not self.history[run_id][index] or not self.original_test_entry[run_id][index]:
                 return 0.0
 
-            model_name = "claude_agent"
+            model_name = "bfcl_agent"
             handler = QwenAPIHandler(model_name, temperature=1.0)
 
             model_result_data = self._convert_conversation_to_eval_format(run_id, index)
@@ -714,13 +751,13 @@ class ClaudeBFCLAgent:
 
 def main():
     """Run a simple test."""
-    # This is a simple test - in practice you would load from BFCL data
-    agent = ClaudeBFCLAgent(
+    agent = BFCLAgent(
         index=0,
         task_ids=["multi_turn_base_0"],
-        experiment_name="claude_bfcl_test",
+        experiment_name="bfcl_agent_test",
         data_path="data/multiturn_data_base_val.jsonl",
         answer_path=Path("data/possible_answer"),
+        backend="bedrock",
     )
 
     results = agent.execute()
