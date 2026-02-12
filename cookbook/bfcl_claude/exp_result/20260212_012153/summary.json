@@ -1,0 +1,15 @@
+{
+  "training": {
+    "total": 50,
+    "successful": 50
+  },
+  "baseline": {
+    "total": 150,
+    "successful": 150
+  },
+  "with_memory": {
+    "total": 150,
+    "successful": 149
+  },
+  "improvement": -1
+}
