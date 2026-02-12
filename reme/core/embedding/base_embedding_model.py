@@ -5,6 +5,7 @@ Defines the abstract base class and standard API for all embedding model impleme
 
 import asyncio
 import hashlib
+import os
 import time
 from abc import ABC
 from collections import OrderedDict
@@ -24,6 +25,8 @@ class BaseEmbeddingModel(ABC):
 
     def __init__(
         self,
+        api_key: str | None = None,
+        base_url: str | None = None,
         model_name: str = "",
         dimensions: int | None = 1024,
         max_batch_size: int = 10,
@@ -36,6 +39,8 @@ class BaseEmbeddingModel(ABC):
         """Initialize model configuration and parameters.
 
         Args:
+            api_key: API key for the embedding service
+            base_url: Base URL for the embedding service
             model_name: Name of the embedding model
             dimensions: Vector dimensions of the embeddings
             max_batch_size: Maximum batch size for embedding requests
@@ -45,6 +50,8 @@ class BaseEmbeddingModel(ABC):
             max_cache_size: Maximum number of embeddings to cache in memory (LRU)
             **kwargs: Additional model-specific parameters
         """
+        self._api_key: str = api_key
+        self._base_url: str = base_url
         self.model_name = model_name
         self.dimensions = dimensions
         self.max_batch_size = max_batch_size
@@ -58,6 +65,16 @@ class BaseEmbeddingModel(ABC):
         self._embedding_cache: OrderedDict[str, list[float]] = OrderedDict()
         self._cache_hits = 0
         self._cache_misses = 0
+
+    @property
+    def api_key(self) -> str | None:
+        """Get API key from environment variable."""
+        return os.getenv("REME_EMBEDDING_API_KEY") or self._api_key
+
+    @property
+    def base_url(self) -> str | None:
+        """Get base URL from environment variable."""
+        return os.getenv("REME_EMBEDDING_BASE_URL") or self._base_url
 
     def _truncate_text(self, text: str) -> str:
         """Truncate text to max_input_length if it exceeds the limit."""

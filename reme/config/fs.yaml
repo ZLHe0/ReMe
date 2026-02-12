@@ -17,7 +17,9 @@ embedding_models:
 
 memory_stores:
   default:
-    backend: sqlite
+#    backend: sqlite
+    backend: chroma
+    db_name: reme.db
     store_name: reme
     embedding_model: default
     fts_enabled: true

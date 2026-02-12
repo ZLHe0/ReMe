@@ -42,8 +42,8 @@ class ReMeCli(ReMeFs):
         fs_cli = FsCli(
             tools=[
                 FsMemorySearch(
-                    hybrid_vector_weight=self.hybrid_vector_weight,
-                    hybrid_candidate_multiplier=self.hybrid_candidate_multiplier,
+                    vector_weight=self.vector_weight,
+                    candidate_multiplier=self.candidate_multiplier,
                 ),
                 BashTool(cwd=self.working_dir),
                 LsTool(cwd=self.working_dir),

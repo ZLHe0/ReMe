@@ -1,0 +1,12 @@
+# AWS Bedrock
+boto3>=1.34.0
+botocore>=1.34.0
+
+# Utilities
+python-dotenv>=1.0.0
+tenacity>=8.2.0
+loguru>=0.7.0
+tqdm>=4.65.0
+
+# Note: bfcl_eval package must be installed separately from gorilla repo
+# See README.md for instructions

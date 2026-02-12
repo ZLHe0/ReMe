@@ -29,31 +29,18 @@ class ReMeFs(Application):
         log_to_console: bool = True,
         llm_api_key: str | None = None,
         llm_base_url: str | None = None,
-        default_llm_name: str | None = None,
-        default_llm_config: dict | None = None,
         embedding_api_key: str | None = None,
         embedding_base_url: str | None = None,
-        default_embedding_model_name: str | None = None,
+        default_llm_config: dict | None = None,
         default_embedding_model_config: dict | None = None,
-        default_store_name: str = "reme",
-        vector_enabled: bool = False,
-        fts_enabled: bool = True,
         default_memory_store_config: dict | None = None,
-        token_counter_backend: str = "base",
         default_token_counter_config: dict | None = None,
-        watch_paths: list[str] | None = None,
-        suffix_filters: list[str] | None = None,
-        recursive: bool = False,
-        debounce: int = 500,
-        chunk_tokens: int = 1000,
-        chunk_overlap: int = 100,
-        scan_on_start: bool = True,
         default_file_watcher_config: dict | None = None,
         context_window_tokens: int = 128000,
         reserve_tokens: int = 36000,
         keep_recent_tokens: int = 20000,
-        hybrid_vector_weight: float = 0.7,
-        hybrid_candidate_multiplier: float = 3.0,
+        vector_weight: float = 0.7,
+        candidate_multiplier: float = 3.0,
         **kwargs,
     ):
         """Initialize ReMe with config."""
@@ -63,54 +50,20 @@ class ReMeFs(Application):
         memory_path.mkdir(parents=True, exist_ok=True)
         self.working_dir: str = str(working_path.absolute())
 
-        default_llm_config = default_llm_config or {}
-        if default_llm_name:
-            default_llm_config["model_name"] = default_llm_name
-
-        default_embedding_model_config = default_embedding_model_config or {}
-        if default_embedding_model_name:
-            default_embedding_model_config["model_name"] = default_embedding_model_name
-
-        default_memory_store_config = default_memory_store_config or {}
-        default_memory_store_config.update(
-            {
-                "store_name": default_store_name,
-                "vector_enabled": vector_enabled,
-                "fts_enabled": fts_enabled,
-            },
-        )
-
-        default_token_counter_config = default_token_counter_config or {}
-        default_token_counter_config.update(
-            {
-                "backend": token_counter_backend,
-            },
-        )
-
         default_file_watcher_config = default_file_watcher_config or {}
-        default_file_watcher_config.update(
-            {
-                "watch_paths": watch_paths
-                or [
-                    str(working_path / "MEMORY.md"),
-                    str(working_path / "memory.md"),
-                    str(memory_path),
-                ],
-                "suffix_filters": suffix_filters or [".md"],
-                "recursive": recursive,
-                "debounce": debounce,
-                "chunk_tokens": chunk_tokens,
-                "chunk_overlap": chunk_overlap,
-                "scan_on_start": scan_on_start,
-            },
-        )
-
+        if not default_file_watcher_config.get("watch_paths", None):
+            default_file_watcher_config["watch_paths"] = [
+                str(working_path / "MEMORY.md"),
+                str(working_path / "memory.md"),
+                str(memory_path),
+            ]
         super().__init__(
             *args,
             llm_api_key=llm_api_key,
             llm_base_url=llm_base_url,
             embedding_api_key=embedding_api_key,
             embedding_base_url=embedding_base_url,
+            working_dir=working_dir,
             config_path=config_path,
             enable_logo=enable_logo,
             log_to_console=log_to_console,
@@ -126,8 +79,8 @@ class ReMeFs(Application):
         self.context_window_tokens: int = context_window_tokens
         self.reserve_tokens: int = reserve_tokens
         self.keep_recent_tokens: int = keep_recent_tokens
-        self.hybrid_vector_weight: float = hybrid_vector_weight
-        self.hybrid_candidate_multiplier: float = hybrid_candidate_multiplier
+        self.vector_weight: float = vector_weight
+        self.candidate_multiplier: float = candidate_multiplier
 
     async def context_check(self, messages: list[Message | dict]) -> dict:
         """Check if messages exceed context limits."""
@@ -194,8 +147,8 @@ class ReMeFs(Application):
             Search results as formatted string
         """
         search_tool = FsMemorySearch(
-            hybrid_vector_weight=self.hybrid_vector_weight,
-            hybrid_candidate_multiplier=self.hybrid_candidate_multiplier,
+            vector_weight=self.vector_weight,
+            candidate_multiplier=self.candidate_multiplier,
         )
         return await search_tool.call(
             query=query,

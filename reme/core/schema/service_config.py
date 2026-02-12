@@ -83,6 +83,7 @@ class MemoryStoreConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     backend: str = Field(default="sqlite")
+    db_name: str = Field(default="reme.db")
     store_name: str = Field(default="reme")
     embedding_model: str = Field(default="default")
 

@@ -1,6 +1,5 @@
 """Asynchronous OpenAI-compatible embedding model implementation for ReMe."""
 
-import os
 from typing import Literal
 
 from openai import AsyncOpenAI
@@ -11,17 +10,9 @@ from .base_embedding_model import BaseEmbeddingModel
 class OpenAIEmbeddingModel(BaseEmbeddingModel):
     """Asynchronous embedding model implementation compatible with OpenAI-style APIs."""
 
-    def __init__(
-        self,
-        api_key: str | None = None,
-        base_url: str | None = None,
-        encoding_format: Literal["float", "base64"] = "float",
-        **kwargs,
-    ):
+    def __init__(self, encoding_format: Literal["float", "base64"] = "float", **kwargs):
         """Initialize the OpenAI async embedding model with API credentials and configuration."""
         super().__init__(**kwargs)
-        self.api_key: str = api_key or os.getenv("REME_EMBEDDING_API_KEY", "")
-        self.base_url: str = base_url or os.getenv("REME_EMBEDDING_BASE_URL", "")
         self.encoding_format: Literal["float", "base64"] = encoding_format
 
         # Create client using factory method

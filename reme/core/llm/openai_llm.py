@@ -1,6 +1,5 @@
 """Asynchronous OpenAI-compatible LLM implementation supporting streaming, tool calls, and reasoning content."""
 
-import os
 from typing import AsyncGenerator
 
 from loguru import logger
@@ -16,16 +15,9 @@ from ..schema import ToolCall
 class OpenAILLM(BaseLLM):
     """Asynchronous LLM client for OpenAI-compatible APIs supporting streaming completions and tool execution."""
 
-    def __init__(
-        self,
-        api_key: str | None = None,
-        base_url: str | None = None,
-        **kwargs,
-    ):
+    def __init__(self, **kwargs):
         """Initialize the OpenAI async client with API credentials and model configuration."""
         super().__init__(**kwargs)
-        self.api_key: str = api_key or os.getenv("REME_LLM_API_KEY", "")
-        self.base_url: str = base_url or os.getenv("REME_LLM_BASE_URL", "")
 
         # Create client using factory method
         self._client = self._create_client()
