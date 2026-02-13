@@ -7,7 +7,7 @@ import ray
 import requests
 from ray import logger
 
-os.environ["APPWORLD_ROOT"] = "."
+os.environ["APPWORLD_ROOT"] = os.environ.get("APPWORLD_ROOT", "/work")
 from dotenv import load_dotenv
 
 load_dotenv("../../.env")
@@ -123,7 +123,10 @@ def run_agent(
             logger.info(f"Starting batch {batch_idx + 1}/{num_batches} with {len(batch_task_ids)} tasks")
 
             # Initialize Ray with the number of CPUs needed for this batch
-            ray.init(num_cpus=len(batch_task_ids))
+            ray.init(
+                num_cpus=len(batch_task_ids),
+                runtime_env={"env_vars": {"APPWORLD_ROOT": os.environ.get("APPWORLD_ROOT", "/work")}}
+            )
 
             future_list: list = []
             for i, task_id in enumerate(batch_task_ids):
@@ -175,8 +178,13 @@ def run_agent(
         dump_file()
 
     else:
+        # Single worker mode - still use Ray but process sequentially
+        ray.init(
+            num_cpus=1,
+            runtime_env={"env_vars": {"APPWORLD_ROOT": os.environ.get("APPWORLD_ROOT", "/work")}}
+        )
         for index, task_id in enumerate(task_ids):
-            agent = AppworldReactAgent(
+            agent = AppworldReactAgent.remote(
                 index=index,
                 model_name=model_name,
                 base_url=base_url,
@@ -193,11 +201,15 @@ def run_agent(
                 memory_workspace_id=workspace_id,
                 memory_base_url=api_url,
             )
-            task_results = agent.execute()
-            if isinstance(task_results, list):
-                result.extend(task_results)
-            else:
-                result.append(task_results)
+            try:
+                task_results = ray.get(agent.execute.remote())
+                if isinstance(task_results, list):
+                    result.extend(task_results)
+                else:
+                    result.append(task_results)
+            except Exception as e:
+                logger.exception(f"run ray error with task_id={task_id}")
+        ray.shutdown()
         dump_file()
 
 def main():

@@ -4,7 +4,7 @@ from typing import List, Any
 
 from tqdm import tqdm
 
-os.environ["APPWORLD_ROOT"] = "."
+os.environ["APPWORLD_ROOT"] = os.environ.get("APPWORLD_ROOT", "/work")
 from dotenv import load_dotenv
 
 load_dotenv("../../.env")
@@ -89,8 +89,6 @@ class AppworldReactAgent:
                     model=self.model_name,
                     messages=messages,
                     temperature=self.temperature,
-                    extra_body={"enable_thinking": False},
-                    seed=0,
                 )
 
                 return response.choices[0].message.content

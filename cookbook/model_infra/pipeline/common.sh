@@ -16,6 +16,16 @@ activate_conda() {
     fi
 }
 
+activate_conda_services() {
+    if [ -n "${CONDA_PATH:-}" ] && [ -n "${CONDA_ENV_SERVICES:-}" ]; then
+        # shellcheck disable=SC1090
+        source "$CONDA_PATH/bin/activate" "$CONDA_ENV_SERVICES"
+    elif [ -n "${CONDA_PATH:-}" ] && [ -n "${CONDA_ENV:-}" ]; then
+        # Fallback to main env if services env not specified
+        source "$CONDA_PATH/bin/activate" "$CONDA_ENV"
+    fi
+}
+
 wait_for_service() {
     local url=$1
     local name=$2

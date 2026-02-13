@@ -14,7 +14,8 @@ source "$INFRA_DIR/pipeline/common.sh"
 # ==========================================================================
 # Configuration
 # ==========================================================================
-CONDA_ENV="${CONDA_ENV:-appworld}"
+CONDA_ENV="${CONDA_ENV:-appworld2}"
+CONDA_ENV_SERVICES="${CONDA_ENV_SERVICES:-bfcl_services}"
 CONDA_PATH="${CONDA_PATH:-$HOME/miniconda}"
 
 MODEL_ID="${MODEL_ID:-us.anthropic.claude-sonnet-4-20250514-v1:0}"
@@ -65,7 +66,7 @@ setup() {
 
 start_services() {
     log "Step 1: Start services"
-    activate_conda
+    activate_conda_services
 
     if [ "$BACKEND" = "bedrock" ]; then
         log "Starting LiteLLM proxy on port $LITELLM_PORT..."
