@@ -104,7 +104,7 @@ Start a vLLM server (OpenAI-compatible) for Qwen3. With 8x L40s, reserve GPU 1 f
 QWEN3_DEVICE=0,2,3,4,5,6,7 \
 QWEN3_DP=7 \
 QWEN3_TP=1 \
-./qwen3/start_qwen3_vllm.sh
+../model_infra/qwen3/start_qwen3_vllm.sh
 ```
 
 Start a vLLM embedding server for `Qwen/Qwen3-Embedding-0.6B` (separate GPU):
@@ -113,7 +113,7 @@ Start a vLLM embedding server for `Qwen/Qwen3-Embedding-0.6B` (separate GPU):
 EMBEDDING_MODEL_NAME=Qwen/Qwen3-Embedding-0.6B \
 EMBEDDING_PORT=5002 \
 EMBEDDING_DEVICE=1 \
-./qwen3/start_qwen3_embedding.sh
+../model_infra/qwen3/start_qwen3_embedding.sh
 ```
 
 Run BFCL with the OpenAI-compatible backend:
@@ -195,7 +195,7 @@ bfcl_models/
 │   └── run_pipeline.sh
 │   └── run_pipeline_claude.sh
 │   └── run_pipeline_qwen.sh
-├── qwen3/
+├── model_infra/qwen3/
 │   ├── start_qwen3_vllm.sh
 │   ├── qwen3_vllm_server.py
 │   ├── start_qwen3_embedding.sh

@@ -16,7 +16,9 @@ set -e
 
 PIPELINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$PIPELINE_DIR/.." && pwd)"
+INFRA_DIR="$(cd "$ROOT_DIR/../model_infra" && pwd)"
 cd "$ROOT_DIR"
+source "$INFRA_DIR/pipeline/common.sh"
 
 # ============================================================================
 # Configuration
@@ -52,47 +54,6 @@ MAX_WORKERS=10
 NUM_TRIALS=1
 
 # ============================================================================
-# Helpers
-# ============================================================================
-log() {
-    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $1"
-    echo "$msg"
-    if [ -d "$LOG_DIR" ]; then
-        echo "$msg" >> "$LOG_DIR/pipeline.log"
-    fi
-}
-
-activate_conda() {
-    source "$CONDA_PATH/bin/activate" "$CONDA_ENV"
-}
-
-wait_for_service() {
-    local url=$1
-    local name=$2
-    local max_attempts=30
-    local attempt=0
-
-    log "Waiting for $name to be ready..."
-    while [ $attempt -lt $max_attempts ]; do
-        if curl -s "$url" > /dev/null 2>&1; then
-            log "$name is ready"
-            return 0
-        fi
-        sleep 2
-        attempt=$((attempt + 1))
-    done
-    echo "ERROR: $name failed to start after $max_attempts attempts"
-    exit 1
-}
-
-cleanup_services() {
-    log "Cleaning up services..."
-    pkill -f "litellm.*--port $LITELLM_PORT" 2>/dev/null || true
-    pkill -f "reme.*port.*$REME_PORT" 2>/dev/null || true
-    pkill -f "vllm.*--port $EMBEDDING_PORT" 2>/dev/null || true
-    sleep 2
-}
-
 # ============================================================================
 # Pipeline Steps
 # ============================================================================
@@ -124,7 +85,7 @@ start_services() {
 
     if [ "$EMBEDDING_START" = true ]; then
         log "Starting Qwen3 embedding server on port $EMBEDDING_PORT (GPU $EMBEDDING_DEVICE)..."
-        nohup bash "$ROOT_DIR/qwen3/start_qwen3_embedding.sh" \
+        nohup bash "$INFRA_DIR/qwen3/start_qwen3_embedding.sh" \
             > "$LOG_DIR/qwen3_embedding.log" 2>&1 &
         wait_for_service "http://localhost:$EMBEDDING_PORT/v1/models" "Qwen3 Embedding"
     else
